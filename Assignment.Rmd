@@ -1,0 +1,89 @@
+---
+title: "Machine Learning Assignment"
+author: "Joany Zachariasse"
+---
+
+## Introduction
+
+Physical activity is known to improve health and increase life expectancy. However, in order for exercise to be effective, a proper technique should be used. Ambient or on-body sensors could be used to measure the effectiveness of an exercise and provide feedback to the user. This approach requires the real-time analysis of significant amounts of sensoring data.
+
+The weight lifting dataset has been developed bij Velloso et al. to investigate the feasibility of automatically assessing the quality of execution of weight lifting exercises and the impact of providing real-time feedback to the athlete - so-called qualitative activity recognition. Six healthy male participants were asked to perform 10 repetitions of the "unilateral dumbbell biceps curl" correctly, and with some common mistakes, while they were wearing sensors  in their gloves, armbands, lumbar belts and dumbbells that detected their movements.
+
+In this report, I will analyse this data to assess whether mistakes in weight-lifting can be detected using a machine learning approach.
+
+## Exploring the data
+
+All data are generously made available by the authors on their website: http://groupware.les.inf.puc-rio.br/har. Extensive information on the data and its analysis can be found in the following article: Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+The following code loads the data. It also assigns NA's to values that are NA or #DIV/0!. 
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache=TRUE}
+library(caret)
+setwd("C:/Users/J.Zachariasse/Documents/Coursera/8. Machine learning/Assignment")
+#setwd("V:/ALKG/Users/982025_Zachariasse/Coursera/8. Practical machine learning")
+```
+
+```{r, cache=TRUE}
+data <- read.csv("pml-training.csv", stringsAsFactors=FALSE, na.strings=c("NA", "#DIV/0!"))
+dim(data)
+```
+
+The data consists of 19,622 rows and 160 variables. Inspection of the data (code and output not shown) shows that some variables are instrumental and do not need to be included in the final dataset. Moreover, some variables consists of summary statistics of the data. These variables should be removed before analysis. An easy way to recognise the summary statistics variables is by their large amount of missing values. Therefore, I use the following code to keep only the relevant variables.
+
+```{r, cache=TRUE}
+data <- data[,-(1:7)]
+data <- data[, colSums(is.na(data)) < nrow(data) * 0.5]
+data$classe <- as.factor(data$classe)
+dim(data)
+```
+
+We now have a relatively clean dataset with 19,622 rows and 53 variables.
+
+## Analysis
+
+When performing machine learning, there is a risk of overfitting, which will give us an optimistic estimate of the model's accuracy. To get a reliable assessment how the model will perform in practice, it is important to evaluate the model in an independent dataset. Therefore, before starting the analysis, we split the data in a training and testing set. We do this by the following code.
+
+```{r, cache=TRUE}
+set.seed(111)
+trainIndex <- createDataPartition(data$classe, p=.5, list=FALSE, times =1)
+dataTrain <- data[ trainIndex,]
+dataTest <- data [-trainIndex,]
+```
+
+Now we can build the model on the training set. For this assignment I choose to build a Random Forest Model. This is a popular algorithm, with the great advantage that it is very accurate.
+
+In the exercise, we want to predict how well a certain exercise is performed. The outcome is represented by the "classe" variable, consisting of the possibilities A, B, C, D and E. 
+
+The following code from the caret package builds the random forest model in the training set, with all 52 predictor variables. I choose to use 4-fold cross-validation by setting the trControl argument. We do not need the cross validation for selecting the variables (as we included all of them) but we will use it for picking the parameters in the model. 4 folds is not a very large number of folds, but is a decent option if your computer is not very fast.
+
+```{r, warning=FALSE, message=FALSE, cache=TRUE}
+modFit <- train(classe~ .,
+                data=dataTrain,
+                method="rf",
+                prox=TRUE, 
+                model=FALSE,
+                trControl = trainControl(method = "cv", number=4))
+modFit
+```
+
+The code shows that we built a random forest plot with 9812 samples (number of rows in the training set) and 52 predictors (number of variables minus the outcome variable). After cross-validation, the model with the heighest accuracy was selected which was mtry=27. 
+
+Below is the final model, consisting of the most accurate parameters.
+
+```{r, cache=TRUE}
+modFit$finalModel
+```
+
+The final model turns out to have an out-of-bag error rate of 1.08, which is very low. 
+
+To estimate the out-of-sample error, I applied the final model to the testing dataset.
+
+```{r, cache=TRUE}
+predTest <- predict(modFit, newdata=dataTest)
+confusionMatrix(predTest, dataTest$classe)
+```
+
+Even in the test set, the accuracy of the model is 0.989 (95% CI 0.987 - 0.991), so both the in and out-of-sample error are low.The expected out of sample error is therefore less than 2%.
+
+## Conclusion
+In this report, we used machine learning to predict how a weight lifting exercise was performed. We developed a random forest model and used cross validation to create a model with a more than 98% accuracy. This shows that it is possible to detect mistakes in weight-lifting using a machine learning approach. Future reports should assess different machine learning algorithms, and use different datasets with different types of exercise to determine the role of machine learning in qualitative activity recognition.
